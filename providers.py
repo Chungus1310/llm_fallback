@@ -93,31 +93,26 @@ class NvidiaProvider(LLMProvider):
     def __init__(self, api_key: str = None):
         self.api_key = api_key or os.getenv("NVIDIA_API_KEY")
         self.name = "NVIDIA"
-        self.base_url = "https://api.nvcf.nvidia.com/v2/nvcf"
+        self.client = OpenAI(
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=self.api_key
+        )
 
     def is_available(self) -> bool:
         return bool(self.api_key)
 
     def generate(self, prompt: str, **kwargs) -> str:
         model = kwargs.get('model', 'meta/llama-3.3-70b-instruct')
-        url = f"{self.base_url}/pexec/functions/{model}"
-        
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": kwargs.get('temperature', 0.7),
-            "max_tokens": kwargs.get('max_tokens', 1000),
-            "stream": False
-        }
-        
-        response = requests.post(url, headers=headers, json=payload)
-        response.raise_for_status()
         
         try:
-            return response.json()['choices'][0]['message']['content']
+            completion = self.client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=kwargs.get('temperature', 0.7),
+                max_tokens=kwargs.get('max_tokens', 1000),
+                top_p=kwargs.get('top_p', 0.7),
+                stream=False
+            )
+            return completion.choices[0].message.content
         except Exception as e:
-            raise RuntimeError(f"NVIDIA API error: Unable to parse response - {str(e)}")
+            raise RuntimeError(f"NVIDIA API error: {str(e)}")
